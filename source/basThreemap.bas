@@ -78,21 +78,31 @@ End Function
 '------------------------------------------------------------------------
 Public Sub createTreemap()
     
-    Dim wshChartSheet As Worksheet      'reference to the chart sheet (this is a worksheet containing shapes)
-    Dim wshTmpData As Worksheet         'temporary worksheet for chart data
+    Dim wshChartSheet As Worksheet             'reference to the chart sheet (this is a worksheet containing shapes)
+    Dim wshTmpData As Worksheet                'temporary worksheet for chart data
+    Dim frmConfigureChart As New frmConfig     'setup chart dialog
 
     On Error GoTo error_handler
-    'TODO: add dialog for asking chart configuration
-    
-    'put chart on a new sheet
-    Set wshChartSheet = p_createChartSheet()
-    'copy data to a temporary sheet to be able to manipulate data (e.g. sort)
-    Set wshTmpData = p_copyData(wshSampleData.Range("C4:C25"), wshSampleData.Range("B4:B25"), _
-                        wshSampleData.Range("D4:D25"))
-    'create chart
-    p_createChart wshChartSheet, wshTmpData
-    'clean up - delete temporary data sheet
-    p_cleanup wshTmpData
+    'detect input data and fill config dialog with results
+    p_setupDataRangeInput frmConfigureChart
+    'show dialog for chart configuration
+    frmConfigureChart.Show
+    If Not frmConfigureChart.canceled Then
+        'put chart on a new sheet
+        Set wshChartSheet = p_createChartSheet()
+        'copy data to a temporary sheet to be able to manipulate data (e.g. sort)
+        'Set wshTmpData = p_copyData(wshSampleData.Range("C4:C25"), wshSampleData.Range("B4:B25"), _
+                            wshSampleData.Range("D4:D25"))
+        Set wshTmpData = p_copyData(wshSampleData.Range(frmConfigureChart.txtSizeRange.Text), _
+                            wshSampleData.Range(frmConfigureChart.txtDescriptionRange.Text), _
+                            wshSampleData.Range(frmConfigureChart.txtColorRange.Text))
+        'create chart
+        p_createChart wshChartSheet, wshTmpData
+        'clean up - delete temporary data sheet
+        p_cleanup wshTmpData
+        'bring the result to front
+        wshChartSheet.Activate
+    End If
     Exit Sub
     
 error_handler:
@@ -403,14 +413,14 @@ Private Sub p_cleanup(pwshTmpData As Worksheet)
     
     On Error GoTo error_handler
     basSystem.log ("cleanup names and temporary data sheet")
-    'remove names to data sheet
+    'remove names from data sheet
     pwshTmpData.Parent.Names(cRngValues).Delete
     pwshTmpData.Parent.Names(cRngDescription).Delete
     pwshTmpData.Parent.Names(cRngColorData).Delete
     pwshTmpData.Parent.Names(cRngIndex).Delete
     'clean up - delete temporary data sheet
     Application.DisplayAlerts = False
-    'pwshTmpData.Delete
+    pwshTmpData.Delete
     Application.DisplayAlerts = True
     Exit Sub
     
@@ -559,3 +569,44 @@ Private Function p_getBlockFillColor(pdblPctInputVal As Double) As Long
 error_handler:
     basSystem.log_error "basThreemap.Let p_getBlockFillColor"
 End Function
+'------------------------------------------------------------------------
+' Description  : detect data table and fill config dialog with result
+' Parameters   :
+'------------------------------------------------------------------------
+Private Sub p_setupDataRangeInput(pfrmInputDialog As frmConfig)
+
+    Dim rngData As Range
+    Dim strAddress As String
+
+    On Error GoTo error_handler
+    If TypeName(Selection) = "Range" Then
+        Set rngData = Selection.CurrentRegion
+        If rngData.Columns.Count = 1 And rngData.Rows.Count = 1 Then
+            'didn't found data table
+            pfrmInputDialog.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
+        ElseIf rngData.Columns.Count = 1 And rngData.Rows.Count > 1 Then
+            'TODO:expect that only size is available, color and description are left
+            
+        ElseIf rngData.Columns.Count = 2 Then
+            'TODO:expect that description column is missing
+            
+        Else
+            'expect at least three columns: description, size and color values
+            strAddress = rngData.Columns(1).Address
+            strAddress = Replace(strAddress, "$", "")
+            pfrmInputDialog.txtDescriptionRange.Text = strAddress
+            strAddress = rngData.Columns(2).Address
+            strAddress = Replace(strAddress, "$", "")
+            pfrmInputDialog.txtSizeRange.Text = strAddress
+            strAddress = rngData.Columns(3).Address
+            strAddress = Replace(strAddress, "$", "")
+            pfrmInputDialog.txtColorRange.Text = strAddress
+        End If
+    Else
+       pfrmInputDialog.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
+    End If
+    Exit Sub
+
+error_handler:
+    basSystem.log_error "basThreemap.p_setupDataRangeInput"
+End Sub
