@@ -81,9 +81,11 @@ Public Sub createTreemap()
     Dim wshChartSheet As Worksheet             'reference to the chart sheet (this is a worksheet containing shapes)
     Dim wshTmpData As Worksheet                'temporary worksheet for chart data
     Dim frmConfigureChart As New frmConfig     'setup chart dialog
+    Dim wshDataSheet As Worksheet
 
     On Error GoTo error_handler
     'detect input data and fill config dialog with results
+    Set wshDataSheet = ActiveSheet
     p_setupDataRangeInput frmConfigureChart
     'show dialog for chart configuration
     frmConfigureChart.Show
@@ -93,9 +95,9 @@ Public Sub createTreemap()
         'copy data to a temporary sheet to be able to manipulate data (e.g. sort)
         'Set wshTmpData = p_copyData(wshSampleData.Range("C4:C25"), wshSampleData.Range("B4:B25"), _
                             wshSampleData.Range("D4:D25"))
-        Set wshTmpData = p_copyData(wshSampleData.Range(frmConfigureChart.txtSizeRange.Text), _
-                            wshSampleData.Range(frmConfigureChart.txtDescriptionRange.Text), _
-                            wshSampleData.Range(frmConfigureChart.txtColorRange.Text))
+        Set wshTmpData = p_copyData(wshDataSheet.Range(frmConfigureChart.txtSizeRange.Text), _
+                            wshDataSheet.Range(frmConfigureChart.txtDescriptionRange.Text), _
+                            wshDataSheet.Range(frmConfigureChart.txtColorRange.Text))
         'create chart
         p_createChart wshChartSheet, wshTmpData
         'clean up - delete temporary data sheet
@@ -155,11 +157,14 @@ End Sub
 '------------------------------------------------------------------------
 Private Function p_copyData(prngData As Range, prngDescription As Range, Optional prngColorValue As Range)
 
-    Dim wshTmpData As Worksheet     'temporary worksheet for chart data
-    Dim wshCurrent As Worksheet     'any sheet in current workbook
-    Dim dblDataRowCount As Double   'number of row in data column
+    Dim wshTmpData As Worksheet             'temporary worksheet for chart data
+    Dim wshCurrent As Worksheet             'any sheet in current workbook
+    Dim dblDataRowCount As Double           'number of row in data column
+    Dim blnValuesAreNegative As Boolean     'true if values are negative
     
     On Error GoTo error_handler
+    'set defaults
+    blnValuesAreNegative = False
     'look if name of the temporary sheet is already in use
     For Each wshCurrent In Worksheets
         If wshCurrent.Name = cTmpDataSheetName Then
@@ -178,6 +183,10 @@ Private Function p_copyData(prngData As Range, prngDescription As Range, Optiona
     wshTmpData.Range("B2").PasteSpecial xlPasteValues
     wshTmpData.Parent.Names.Add cRngValues, "='" & cTmpDataSheetName & "'!" & _
                                 wshTmpData.Range(Range("B2"), Range("B2").Offset(dblDataRowCount - 1)).Address
+    'check if values are negative
+    If Application.WorksheetFunction.Max(wshTmpData.Range(cRngValues)) < 0 Then
+        blnValuesAreNegative = True
+    End If
     'copy description data and set workbook name for later access
     prngDescription.Copy
     wshTmpData.Range("C2").PasteSpecial xlPasteValues
@@ -197,9 +206,16 @@ Private Function p_copyData(prngData As Range, prngDescription As Range, Optiona
     'sort data before creating index
     wshTmpData.Sort.SortFields.Clear
     'set head of data column as key sort field
-    wshTmpData.Sort.SortFields.Add Key:=Range("B2") _
-        , SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:= _
-        xlSortTextAsNumbers
+    If blnValuesAreNegative Then
+        'sort by absolout values
+        wshTmpData.Sort.SortFields.Add Key:=Range("B2") _
+            , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:= _
+            xlSortTextAsNumbers
+    Else
+        wshTmpData.Sort.SortFields.Add Key:=Range("B2") _
+            , SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:= _
+            xlSortTextAsNumbers
+    End If
     With wshTmpData.Sort
         .SetRange Range(Range("B2"), Range("D2").Offset(dblDataRowCount - 1).Address)
         .Header = xlNo
@@ -316,7 +332,7 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
     Set rngCurrent = pwshTmpData.Parent.Names(cRngIndex).RefersToRange.Find(plngFromRecord, LookAt:=xlWhole)
     Set rngClusterRange = Range(rngCurrent.Offset(, 1), rngCurrent.Offset(plngToRecord - plngFromRecord, 1))
     'get the overall value of this cluster range
-    dblClusterRangeValue = Application.WorksheetFunction.Sum(rngClusterRange)
+    dblClusterRangeValue = Abs(Application.WorksheetFunction.Sum(rngClusterRange))
     'define a cluster limit
     dblClusterLimit = dblClusterRangeValue / 3
     basSystem.log "limit is " & dblClusterLimit, cLogDebug
@@ -329,11 +345,11 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
     'get all records belonging to a cluster
     For lngRecord = 1 To lngClusterAreaSize
         'add the record value to the cluster value
-         dblClusterValue = dblClusterValue + rngCurrent.Offset(, 1).Value
+         dblClusterValue = dblClusterValue + Abs(rngCurrent.Offset(, 1).Value)
         'if next record would succeed cluster limit or current record is last record then cluster is complete
          If ((intCluster < 3) And _
-                        (Application.WorksheetFunction.Sum(Range(rngClusterRange.Cells(1, 1), _
-                        rngClusterRange.Cells(lngRecord + 1, 1))) _
+                        (Abs(Application.WorksheetFunction.Sum(Range(rngClusterRange.Cells(1, 1), _
+                        rngClusterRange.Cells(lngRecord + 1, 1)))) _
                     > dblClusterLimit)) Or (lngRecord = lngClusterAreaSize) Then
             'save last record for this cluster
             lngClusterEnd = plngFromRecord + lngRecord - 1
@@ -399,7 +415,6 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
         'move to next record
         Set rngCurrent = rngCurrent.Offset(1)
     Next
-    
     Exit Sub
     
 error_handler:

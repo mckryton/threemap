@@ -115,3 +115,41 @@ Public Sub logd(pstrLogMsg As String)
 error_handler:
     basSystem.log_error "basSystem.logd"
 End Sub
+'-------------------------------------------------------------
+' Description   : save source code as text files
+'-------------------------------------------------------------
+Private Sub exportCode()
+
+    Dim vcomSource As VBComponent
+    Dim strPath As String
+    Dim strSeparator As String
+    Dim strSuffix As String
+
+    On Error GoTo error_handler
+    #If Mac Then
+        strSeparator = ":"
+    #Else
+        strSeparator = "\"
+    #End If
+    strPath = ThisWorkbook.Path & strSeparator & "source"
+    For Each vcomSource In Application.VBE.VBProjects("threemap").VBComponents
+        Select Case vcomSource.Type
+            Case vbext_ct_StdModule
+                strSuffix = "bas"
+            Case vbext_ct_ClassModule
+                strSuffix = "cls"
+            Case vbext_ct_Document
+                strSuffix = "cls"
+            Case vbext_ct_MSForm
+                strSuffix = "frm"
+            Case Else
+                strSuffix = "txt"
+        End Select
+        vcomSource.Export strPath & strSeparator & vcomSource.Name & "." & strSuffix
+        basSystem.log "export code to " & strPath & strSeparator & vcomSource.Name & "." & strSuffix
+    Next
+    Exit Sub
+
+error_handler:
+    basSystem.log_error "basSystem.exportCode"
+End Sub

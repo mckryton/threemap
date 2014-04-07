@@ -3,7 +3,7 @@ Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmConfig
    Caption         =   "Select data source"
    ClientHeight    =   5000
    ClientLeft      =   0
-   ClientTop       =   -7920
+   ClientTop       =   -8360.001
    ClientWidth     =   7600
    OleObjectBlob   =   "frmConfig.frx":0000
    StartUpPosition =   1  'CenterOwner
@@ -115,7 +115,7 @@ Private Function p_reduceRangeByOneRow(pstrRangeAddress As String) As String
         strStartAddress = Left(pstrRangeAddress, InStr(pstrRangeAddress, ":") - 1)
         lngStartRow = basExcel.getRowFromAddress(strStartAddress) + 1
         strColAddress = basExcel.getColumnFromAddress(strStartAddress)
-        p_reduceRangeByOneRow = strColAddress & lngStartRow & Right(pstrRangeAddress, InStr(pstrRangeAddress, ":"))
+        p_reduceRangeByOneRow = strColAddress & lngStartRow & Right(pstrRangeAddress, InStr(pstrRangeAddress, ":") + 1)
     Else
         'return given address unchanged if it looks not liken an range address
         p_reduceRangeByOneRow = pstrRangeAddress
@@ -142,7 +142,7 @@ Private Function p_extendRangeByOneRow(pstrRangeAddress As String) As String
         strStartAddress = Left(pstrRangeAddress, InStr(pstrRangeAddress, ":") - 1)
         lngStartRow = basExcel.getRowFromAddress(strStartAddress) - 1
         strColAddress = basExcel.getColumnFromAddress(strStartAddress)
-        p_extendRangeByOneRow = strColAddress & lngStartRow & Right(pstrRangeAddress, InStr(pstrRangeAddress, ":"))
+        p_extendRangeByOneRow = strColAddress & lngStartRow & Right(pstrRangeAddress, InStr(pstrRangeAddress, ":") + 1)
     Else
         'return given address unchanged if it looks not liken an range address
         p_extendRangeByOneRow = pstrRangeAddress
