@@ -9,6 +9,7 @@ Dim mrgbLowerColor As Long        'shape color for color values < 0%
 Dim mrgbUpperColor As Long        'shape color for color values > 0%
 Dim mrgbDefaultColor As Long      'shape color if color value equals 0% or no color value defined
 Dim mdblColorValueLimit As Double 'value where shape is set to full upper or lower color
+Dim mfrmConfig As frmConfig       'reference to current config form
 
 'Constants
 
@@ -80,24 +81,23 @@ Public Sub createTreemap()
     
     Dim wshChartSheet As Worksheet             'reference to the chart sheet (this is a worksheet containing shapes)
     Dim wshTmpData As Worksheet                'temporary worksheet for chart data
-    Dim frmConfigureChart As New frmConfig     'setup chart dialog
     Dim wshDataSheet As Worksheet
 
     On Error GoTo error_handler
     'detect input data and fill config dialog with results
     Set wshDataSheet = ActiveSheet
-    p_setupDataRangeInput frmConfigureChart
+    p_setupDataRangeInput
     'show dialog for chart configuration
-    frmConfigureChart.Show
-    If Not frmConfigureChart.canceled Then
+    Config.Show
+    If Not Config.canceled Then
         'put chart on a new sheet
         Set wshChartSheet = p_createChartSheet()
         'copy data to a temporary sheet to be able to manipulate data (e.g. sort)
         'Set wshTmpData = p_copyData(wshSampleData.Range("C4:C25"), wshSampleData.Range("B4:B25"), _
                             wshSampleData.Range("D4:D25"))
-        Set wshTmpData = p_copyData(wshDataSheet.Range(frmConfigureChart.txtSizeRange.Text), _
-                            wshDataSheet.Range(frmConfigureChart.txtDescriptionRange.Text), _
-                            wshDataSheet.Range(frmConfigureChart.txtColorRange.Text))
+        Set wshTmpData = p_copyData(wshDataSheet.Range(Config.txtSizeRange.Text), _
+                            wshDataSheet.Range(Config.txtLabelRange.Text), _
+                            wshDataSheet.Range(Config.txtColorRange.Text))
         'create chart
         p_createChart wshChartSheet, wshTmpData
         'clean up - delete temporary data sheet
@@ -322,6 +322,7 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
     Dim dblClusterRangeArea As Double               'shape size of all three clusters
     Dim dblClusterArea As Double                    'shape size of one cluster
     Dim dblColorValue As Double
+    Dim strShapeLabel As String
     
     On Error GoTo error_handler
     basSystem.log "cluster data from record " & plngFromRecord & " to " & plngToRecord, cLogDebug
@@ -391,11 +392,10 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
                 basSystem.log "draw cluster " & intCluster
                 'draw cluster shape
                 dblColorValue = Abs(rngCurrent.Offset(, 3).Value / basThreemap.p_ColorValueLimit)
+                strShapeLabel = p_getShapeLabel(Config.txtDescriptionOutput.Text, rngCurrent.Offset(, 1).Value, _
+                                    rngCurrent.Offset(, 2).Text, dblColorValue)
                 p_drawClusterShape pwshChartSheet, lngClusterX0, lngClusterY0, lngClusterWidth, lngClusterHeight, _
-                                lngClusterStart & "/" & _
-                                intCluster & " - " & rngCurrent.Offset(, 2).Text & " - " & rngCurrent.Offset(, 1) _
-                                & " - " & Format(dblColorValue, "0.0%") _
-                                , rngCurrent.Offset(, 3).Value
+                                strShapeLabel, rngCurrent.Offset(, 3).Value
             Else
                 'cluster data by using this function recursive
                 basSystem.log "recursive cluster " & intCluster & " from record " & lngClusterStart & " to " & lngClusterEnd & _
@@ -588,7 +588,7 @@ End Function
 ' Description  : detect data table and fill config dialog with result
 ' Parameters   :
 '------------------------------------------------------------------------
-Private Sub p_setupDataRangeInput(pfrmInputDialog As frmConfig)
+Private Sub p_setupDataRangeInput()
 
     Dim rngData As Range
     Dim strAddress As String
@@ -598,7 +598,7 @@ Private Sub p_setupDataRangeInput(pfrmInputDialog As frmConfig)
         Set rngData = Selection.CurrentRegion
         If rngData.Columns.Count = 1 And rngData.Rows.Count = 1 Then
             'didn't found data table
-            pfrmInputDialog.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
+            Config.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
         ElseIf rngData.Columns.Count = 1 And rngData.Rows.Count > 1 Then
             'TODO:expect that only size is available, color and description are left
             
@@ -609,19 +609,65 @@ Private Sub p_setupDataRangeInput(pfrmInputDialog As frmConfig)
             'expect at least three columns: description, size and color values
             strAddress = rngData.Columns(1).Address
             strAddress = Replace(strAddress, "$", "")
-            pfrmInputDialog.txtDescriptionRange.Text = strAddress
+            Config.txtLabelRange.Text = strAddress
             strAddress = rngData.Columns(2).Address
             strAddress = Replace(strAddress, "$", "")
-            pfrmInputDialog.txtSizeRange.Text = strAddress
+            Config.txtSizeRange.Text = strAddress
             strAddress = rngData.Columns(3).Address
             strAddress = Replace(strAddress, "$", "")
-            pfrmInputDialog.txtColorRange.Text = strAddress
+            Config.txtColorRange.Text = strAddress
         End If
     Else
-       pfrmInputDialog.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
+       Config.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
     End If
     Exit Sub
 
 error_handler:
     basSystem.log_error "basThreemap.p_setupDataRangeInput"
 End Sub
+'------------------------------------------------------------------------
+' Description  : build label for each shape
+' Parameters   : pstrLabelPattern   - the input pattern from the config form
+'                pdblSizeValue      - value from the size range
+'                pstrLabel          - text from the label data range
+'                pdblColorValue     - normalized color value in percent
+' Returnvalue  : text to put on a single shape
+'------------------------------------------------------------------------
+Private Function p_getShapeLabel(pstrLabelPattern As String, pdblSizeValue As Double, Optional pstrLabel, Optional pdblColorValue)
+
+    Dim strShapeLabel As String
+
+    On Error GoTo error_handler
+    'insert size
+    strShapeLabel = Replace(pstrLabelPattern, "#size", pdblSizeValue)
+    'insert label
+    If Not IsMissing(pstrLabel) Then
+        strShapeLabel = Replace(strShapeLabel, "#label", pstrLabel)
+    End If
+    'insert color percentage
+    If Not IsMissing(pdblColorValue) Then
+        strShapeLabel = Replace(strShapeLabel, "#colorpct", Format(pdblColorValue, "0.0%"))
+    End If
+    p_getShapeLabel = strShapeLabel
+    Exit Function
+
+error_handler:
+    basSystem.log_error "basThreemap.p_getShapeLabel"
+End Function
+'------------------------------------------------------------------------
+' Description  : access to current config form
+' Parameters   :
+'------------------------------------------------------------------------
+Public Property Get Config() As frmConfig
+
+    On Error GoTo error_handler
+    If TypeName(mfrmConfig) = "Nothing" Then
+        Set mfrmConfig = New frmConfig
+    End If
+    Set Config = mfrmConfig
+    Exit Property
+
+error_handler:
+    basSystem.log_error "basThreemap.Config Get"
+End Property
+

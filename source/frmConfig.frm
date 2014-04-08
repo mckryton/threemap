@@ -1,9 +1,9 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmConfig 
    Caption         =   "Select data source"
-   ClientHeight    =   5000
+   ClientHeight    =   6300
    ClientLeft      =   0
-   ClientTop       =   -8360.001
+   ClientTop       =   -13200
    ClientWidth     =   7600
    OleObjectBlob   =   "frmConfig.frx":0000
    StartUpPosition =   1  'CenterOwner
@@ -13,6 +13,7 @@ Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
+
 '------------------------------------------------------------------------
 ' Description  : user interface for configuration
 '------------------------------------------------------------------------
@@ -46,6 +47,9 @@ Private Sub cmdDrawChart_Click()
 
     Me.Hide
 End Sub
+
+
+
 '------------------------------------------------------------------------
 ' Description  : init form
 '------------------------------------------------------------------------
@@ -77,7 +81,7 @@ Private Sub p_ignoreHeadline()
     Dim strColAddress As String
     
     On Error GoTo error_handler
-    Me.txtDescriptionRange.Text = p_reduceRangeByOneRow(Me.txtDescriptionRange.Text)
+    Me.txtLabelRange.Text = p_reduceRangeByOneRow(Me.txtLabelRange.Text)
     Me.txtColorRange.Text = p_reduceRangeByOneRow(Me.txtColorRange.Text)
     Me.txtSizeRange.Text = p_reduceRangeByOneRow(Me.txtSizeRange.Text)
     Exit Sub
@@ -91,7 +95,7 @@ End Sub
 Private Sub p_includeHeadline()
 
     On Error GoTo error_handler
-    Me.txtDescriptionRange.Text = p_extendRangeByOneRow(Me.txtDescriptionRange.Text)
+    Me.txtLabelRange.Text = p_extendRangeByOneRow(Me.txtLabelRange.Text)
     Me.txtColorRange.Text = p_extendRangeByOneRow(Me.txtColorRange.Text)
     Me.txtSizeRange.Text = p_extendRangeByOneRow(Me.txtSizeRange.Text)
     Exit Sub
