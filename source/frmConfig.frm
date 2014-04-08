@@ -3,7 +3,7 @@ Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmConfig
    Caption         =   "Select data source"
    ClientHeight    =   6300
    ClientLeft      =   0
-   ClientTop       =   -13200
+   ClientTop       =   -14080
    ClientWidth     =   7600
    OleObjectBlob   =   "frmConfig.frx":0000
    StartUpPosition =   1  'CenterOwner

@@ -254,12 +254,6 @@ Private Sub p_drawClusterShape(pwshChartSheet As Worksheet, plngX0 As Double, pl
     Dim rgbShapeFillColor As Long           'shape fill color
     Dim rgbShapeFontColor As Long           'font color for shape
     Dim dblColorValue As Double             'normalized color value
-    Dim intRedDiff As Long
-    Dim intGreenDiff As Long
-    Dim intBlueDiff As Long
-    Dim intNewRed As Long
-    Dim intNewGreen As Long
-    Dim intNewBlue As Long
 
     On Error GoTo error_handler
     basSystem.logd "draw shape at x:" & plngX0 & " y:" & plngY0 & " w:" & plngWidth & " h:" & plngHeight & _
@@ -273,12 +267,14 @@ Private Sub p_drawClusterShape(pwshChartSheet As Worksheet, plngX0 As Double, pl
     'create shape
     Set shpCluster = pwshChartSheet.Shapes.AddShape(msoShapeRectangle, plngX0, plngY0, plngWidth, plngHeight)
     'format shape
+    shpCluster.Fill.OneColorGradient msoGradientVertical, 1, 0
     With shpCluster
         .Visible = msoTrue
         .AlternativeText = pstrDescription
-        .Fill.ForeColor.RGB = rgbShapeFillColor
-        .Fill.Transparency = 0
+        'NOTE: on windows one have to set the shape solid BEFORE fill color is set
         .Fill.Solid
+        .Fill.Transparency = 0
+        .Fill.ForeColor.RGB = rgbShapeFillColor
         .Line.Weight = 0.25
         .Line.ForeColor.RGB = RGB(0, 0, 0)
         .TextFrame2.TextRange.Text = pstrDescription
@@ -563,20 +559,20 @@ Private Function p_getBlockFillColor(pdblPctInputVal As Double) As Long
     On Error GoTo error_handler
     basSystem.logd "get color for value " & pdblPctInputVal
     If pdblPctInputVal > 0 Then
-        rgbBlockFillColor = RGB(cBaseRed * (1 - pdblPctInputVal) + cPositiveRed * pdblPctInputVal, _
-                                cBaseGreen * (1 - pdblPctInputVal) + cPositiveGreen * pdblPctInputVal, _
-                                cBaseBlue * (1 - pdblPctInputVal) + cPositiveBlue * pdblPctInputVal)
-        basSystem.logd "positiv color is r: " & cBaseRed * (1 - pdblPctInputVal) + cPositiveRed * pdblPctInputVal & _
-                         " | g: " & cBaseGreen * (1 - pdblPctInputVal) + cPositiveGreen * pdblPctInputVal & _
-                         " | b: " & cBaseBlue * (1 - pdblPctInputVal) + cPositiveBlue * pdblPctInputVal
+        rgbBlockFillColor = RGB(CInt(cBaseRed * (1 - pdblPctInputVal) + cPositiveRed * pdblPctInputVal), _
+                                CInt(cBaseGreen * (1 - pdblPctInputVal) + cPositiveGreen * pdblPctInputVal), _
+                                CInt(cBaseBlue * (1 - pdblPctInputVal) + cPositiveBlue * pdblPctInputVal))
+        basSystem.logd "positiv color is r: " & CInt(cBaseRed * (1 - pdblPctInputVal) + cPositiveRed * pdblPctInputVal) & _
+                         " | g: " & CInt(cBaseGreen * (1 - pdblPctInputVal) + cPositiveGreen * pdblPctInputVal) & _
+                         " | b: " & CInt(cBaseBlue * (1 - pdblPctInputVal) + cPositiveBlue * pdblPctInputVal)
     Else
         pdblPctInputVal = Abs(pdblPctInputVal)
-        rgbBlockFillColor = RGB(cBaseRed * (1 - pdblPctInputVal) + cNegativeRed * pdblPctInputVal, _
-                                cBaseGreen * (1 - pdblPctInputVal) + cNegativeGreen * pdblPctInputVal, _
-                                cBaseBlue * (1 - pdblPctInputVal) + cNegativeBlue * pdblPctInputVal)
-        basSystem.logd "negative color is r: " & cBaseRed * (1 - pdblPctInputVal) + cNegativeRed * pdblPctInputVal & _
-                         " | g: " & cBaseGreen * (1 - pdblPctInputVal) + cNegativeGreen * pdblPctInputVal & _
-                         " | b: " & cBaseBlue * (1 - pdblPctInputVal) + cNegativeBlue * pdblPctInputVal
+        rgbBlockFillColor = RGB(CInt(cBaseRed * (1 - pdblPctInputVal) + cNegativeRed * pdblPctInputVal), _
+                                CInt(cBaseGreen * (1 - pdblPctInputVal) + cNegativeGreen * pdblPctInputVal), _
+                                CInt(cBaseBlue * (1 - pdblPctInputVal) + cNegativeBlue * pdblPctInputVal))
+        basSystem.logd "negative color is r: " & CInt(cBaseRed * (1 - pdblPctInputVal) + cNegativeRed * pdblPctInputVal) & _
+                         " | g: " & CInt(cBaseGreen * (1 - pdblPctInputVal) + cNegativeGreen * pdblPctInputVal) & _
+                         " | b: " & CInt(cBaseBlue * (1 - pdblPctInputVal) + cNegativeBlue * pdblPctInputVal)
     End If
     p_getBlockFillColor = rgbBlockFillColor
     Exit Function
