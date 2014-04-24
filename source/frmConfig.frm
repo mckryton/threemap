@@ -3,7 +3,7 @@ Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmConfig
    Caption         =   "Select data source"
    ClientHeight    =   6300
    ClientLeft      =   0
-   ClientTop       =   -14080
+   ClientTop       =   -15840
    ClientWidth     =   7600
    OleObjectBlob   =   "frmConfig.frx":0000
    StartUpPosition =   1  'CenterOwner
@@ -156,4 +156,38 @@ Private Function p_extendRangeByOneRow(pstrRangeAddress As String) As String
 error_handler:
     basSystem.log_error "frmConfig.p_extendRangeByOneRow"
 End Function
+'------------------------------------------------------------------------
+' Description  : signals if range for shape lables is set
+' Returnvalue  : true if lables are available
+'------------------------------------------------------------------------
+Public Property Get LabelsAvailable() As Boolean
 
+    On Error GoTo error_handler
+    If Trim(Me.txtLabelRange.Text) = "" Then
+        LabelsAvailable = False
+    Else
+        LabelsAvailable = True
+    End If
+    Exit Property
+
+error_handler:
+    basSystem.log_error "frmConfig.LabelsAvailable Get"
+End Property
+
+'------------------------------------------------------------------------
+' Description  : signals if range for color data  is set
+' Returnvalue  : true if lables are available
+'------------------------------------------------------------------------
+Public Property Get ColorDataAvailable() As Boolean
+
+    On Error GoTo error_handler
+    If Trim(Me.txtColorRange.Text) = "" Then
+        ColorDataAvailable = False
+    Else
+        ColorDataAvailable = True
+    End If
+    Exit Property
+
+error_handler:
+    basSystem.log_error "frmConfig.ColorDataAvailable Get"
+End Property

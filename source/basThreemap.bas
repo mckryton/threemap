@@ -66,6 +66,7 @@ Private Function p_createChartSheet()
     Next
     'set the default name for the new sheet
     wshChartSheet.Name = cLangChartSheetName & intNewNumber
+    wshChartSheet.Activate
     basSystem.log "new sheet named to " & cLangChartSheetName & intNewNumber
     'return the sheets object
     Set p_createChartSheet = wshChartSheet
@@ -90,14 +91,12 @@ Public Sub createTreemap()
     'show dialog for chart configuration
     Config.Show
     If Not Config.canceled Then
+        'set default shape fill color to white
+        basThreemap.p_DefaultColor = RGB(255, 255, 255)
         'put chart on a new sheet
         Set wshChartSheet = p_createChartSheet()
         'copy data to a temporary sheet to be able to manipulate data (e.g. sort)
-        'Set wshTmpData = p_copyData(wshSampleData.Range("C4:C25"), wshSampleData.Range("B4:B25"), _
-                            wshSampleData.Range("D4:D25"))
-        Set wshTmpData = p_copyData(wshDataSheet.Range(Config.txtSizeRange.Text), _
-                            wshDataSheet.Range(Config.txtLabelRange.Text), _
-                            wshDataSheet.Range(Config.txtColorRange.Text))
+        Set wshTmpData = p_copyData(wshDataSheet)
         'create chart
         p_createChart wshChartSheet, wshTmpData
         'clean up - delete temporary data sheet
@@ -155,12 +154,15 @@ End Sub
 '                prngColorValue         - column containing color data
 ' Returnvalue  : reference to the temporary data
 '------------------------------------------------------------------------
-Private Function p_copyData(prngData As Range, prngDescription As Range, Optional prngColorValue As Range)
+Private Function p_copyData(pwshData As Worksheet)
 
     Dim wshTmpData As Worksheet             'temporary worksheet for chart data
     Dim wshCurrent As Worksheet             'any sheet in current workbook
     Dim dblDataRowCount As Double           'number of row in data column
     Dim blnValuesAreNegative As Boolean     'true if values are negative
+    Dim rngLabelRange As Range
+    Dim rngColorValue As Range
+    Dim rngDataValues As Range
     
     On Error GoTo error_handler
     'set defaults
@@ -176,10 +178,12 @@ Private Function p_copyData(prngData As Range, prngDescription As Range, Optiona
     Set wshTmpData = Worksheets.Add
     'name tmp data sheet
     wshTmpData.Name = cTmpDataSheetName
+    'set data value range
+    Set rngDataValues = pwshData.Range(Trim(Config.txtSizeRange.Text))
     'count data rows
-    dblDataRowCount = prngData.Rows.Count
+    dblDataRowCount = rngDataValues.Rows.Count
     'copy value data and set workbook name for later access
-    prngData.Copy
+    rngDataValues.Copy
     wshTmpData.Range("B2").PasteSpecial xlPasteValues
     wshTmpData.Parent.Names.Add cRngValues, "='" & cTmpDataSheetName & "'!" & _
                                 wshTmpData.Range(Range("B2"), Range("B2").Offset(dblDataRowCount - 1)).Address
@@ -187,21 +191,26 @@ Private Function p_copyData(prngData As Range, prngDescription As Range, Optiona
     If Application.WorksheetFunction.Max(wshTmpData.Range(cRngValues)) < 0 Then
         blnValuesAreNegative = True
     End If
-    'copy description data and set workbook name for later access
-    prngDescription.Copy
-    wshTmpData.Range("C2").PasteSpecial xlPasteValues
-    wshTmpData.Parent.Names.Add cRngDescription, "='" & cTmpDataSheetName & "'!" & _
-                                wshTmpData.Range(Range("C2"), Range("C2").Offset(dblDataRowCount - 1)).Address
+    'if data for shape labels is given
+    If Config.LabelsAvailable Then
+        Set rngLabelRange = pwshData.Range(Trim(Config.txtLabelRange.Text))
+        'copy description data and set workbook name for later access
+        rngLabelRange.Copy
+        wshTmpData.Range("C2").PasteSpecial xlPasteValues
+        wshTmpData.Parent.Names.Add cRngDescription, "='" & cTmpDataSheetName & "'!" & _
+                                    wshTmpData.Range(Range("C2"), Range("C2").Offset(dblDataRowCount - 1)).Address
+    End If
     'if color data is given
-    If Not IsMissing(prngColorValue) Then
+    If Config.ColorDataAvailable Then
+        Set rngColorValue = pwshData.Range(Trim(Config.txtColorRange.Text))
         'copy color index data and set workbook name for later access
-        prngColorValue.Copy
+        rngColorValue.Copy
         wshTmpData.Range("D2").PasteSpecial xlPasteValues
         wshTmpData.Parent.Names.Add cRngColorData, "='" & cTmpDataSheetName & "'!" & _
                                     wshTmpData.Range(Range("D2"), Range("D2").Offset(dblDataRowCount - 1)).Address
         'find color value limit (max. value)
-        basThreemap.p_ColorValueLimit = Application.WorksheetFunction.Max(Application.WorksheetFunction.Max(prngColorValue), _
-                        Abs(Application.WorksheetFunction.Min(prngColorValue)))
+        basThreemap.p_ColorValueLimit = Application.WorksheetFunction.Max(Application.WorksheetFunction.Max(rngColorValue), _
+                        Abs(Application.WorksheetFunction.Min(rngColorValue)))
     End If
     'sort data before creating index
     wshTmpData.Sort.SortFields.Clear
@@ -245,15 +254,14 @@ End Function
 '                plngWidth              - shape width
 '                plngHeight             - shape height
 '                pstrDescription        - record text
-'                pdblColorValue         - color value
+'                pdblColorValue         - normalized color value
 '------------------------------------------------------------------------
 Private Sub p_drawClusterShape(pwshChartSheet As Worksheet, plngX0 As Double, plngY0 As Double, plngWidth As Double, _
-                                plngHeight As Double, pstrDescription As String, Optional pdblColorValue As Double)
+                                plngHeight As Double, pstrDescription As String, pdblColorValue As Double)
     
     Dim shpCluster As Shape                 'shape object for the single cluster shape
     Dim rgbShapeFillColor As Long           'shape fill color
     Dim rgbShapeFontColor As Long           'font color for shape
-    Dim dblColorValue As Double             'normalized color value
 
     On Error GoTo error_handler
     basSystem.logd "draw shape at x:" & plngX0 & " y:" & plngY0 & " w:" & plngWidth & " h:" & plngHeight & _
@@ -261,9 +269,8 @@ Private Sub p_drawClusterShape(pwshChartSheet As Worksheet, plngX0 As Double, pl
     'set default colors white for background and black for font
     rgbShapeFillColor = basThreemap.p_DefaultColor
     rgbShapeFontColor = RGB(0, 0, 0)
-    'calculate colors
-    dblColorValue = pdblColorValue / basThreemap.p_ColorValueLimit
-    rgbShapeFillColor = basThreemap.p_getBlockFillColor(dblColorValue)
+    'get rgb for color value
+    rgbShapeFillColor = basThreemap.p_getBlockFillColor(pdblColorValue)
     'create shape
     Set shpCluster = pwshChartSheet.Shapes.AddShape(msoShapeRectangle, plngX0, plngY0, plngWidth, plngHeight)
     'format shape
@@ -317,8 +324,8 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
     Dim dblClusterValue As Double                   'value of one cluster
     Dim dblClusterRangeArea As Double               'shape size of all three clusters
     Dim dblClusterArea As Double                    'shape size of one cluster
-    Dim dblColorValue As Double
-    Dim strShapeLabel As String
+    Dim dblColorValue As Double                     'normalized value (-1 to +1) for color
+    Dim strShapeLabel As String                     'text for shape labels
     
     On Error GoTo error_handler
     basSystem.log "cluster data from record " & plngFromRecord & " to " & plngToRecord, cLogDebug
@@ -341,72 +348,78 @@ Private Sub p_clusterData(pwshChartSheet As Worksheet, pwshTmpData As Worksheet,
     lngClusterAreaSize = plngToRecord - plngFromRecord + 1
     'get all records belonging to a cluster
     For lngRecord = 1 To lngClusterAreaSize
-        'add the record value to the cluster value
-         dblClusterValue = dblClusterValue + Abs(rngCurrent.Offset(, 1).Value)
-        'if next record would succeed cluster limit or current record is last record then cluster is complete
-         If ((intCluster < 3) And _
-                        (Abs(Application.WorksheetFunction.Sum(Range(rngClusterRange.Cells(1, 1), _
-                        rngClusterRange.Cells(lngRecord + 1, 1)))) _
-                    > dblClusterLimit)) Or (lngRecord = lngClusterAreaSize) Then
-            'save last record for this cluster
-            lngClusterEnd = plngFromRecord + lngRecord - 1
-            'calculate size of the cluster
-            dblClusterSizePct = dblClusterValue / dblClusterRangeValue
-            'determine shape size of this cluster
-            dblClusterArea = dblClusterRangeArea * dblClusterSizePct
-            'shape edge size depends on cluster id
-            Select Case intCluster
-                Case 1
-                    'first cluster shape is on top and takes full width
-                    'use given coordinates as origin for the first cluster
-                    lngClusterX0 = plngClusterShapeX0
-                    lngClusterY0 = plngClusterShapeY0
-                    lngClusterWidth = plngClusterRangeWidth
-                    'height depends on cluster area size
-                    lngClusterHeight = dblClusterArea / plngClusterRangeWidth
-                Case 2
-                    'second cluster shape is left below first cluster shape
-                    lngClusterY0 = lngClusterY0 + lngClusterHeight
-                    'next line is just for a better understanding
-                    lngClusterX0 = lngClusterX0
-                    'width depends on cluster area size
-                    lngClusterWidth = lngClusterWidth * _
-                        (dblClusterArea / (dblClusterRangeArea - (lngClusterWidth * lngClusterHeight)))
-                    lngClusterHeight = plngClusterRangeHeight - lngClusterHeight
-                Case 3
-                    'third cluster shape is right below first cluster shape
-                    lngClusterX0 = lngClusterX0 + lngClusterWidth
-                    'next line is just for a better understanding
-                    lngClusterY0 = lngClusterY0
-                    'height is the same as for cluster 2
-                    lngClusterHeight = lngClusterHeight
-                    'width of cluster three is the remaining width
-                    lngClusterWidth = plngClusterRangeWidth - lngClusterWidth
-            End Select
-            'if cluster contains only one record, draw cluster
-            If lngClusterEnd - lngClusterStart = 0 Then
-                basSystem.log "draw cluster " & intCluster
-                'draw cluster shape
-                dblColorValue = Abs(rngCurrent.Offset(, 3).Value / basThreemap.p_ColorValueLimit)
-                strShapeLabel = p_getShapeLabel(Config.txtDescriptionOutput.Text, rngCurrent.Offset(, 1).Value, _
-                                    rngCurrent.Offset(, 2).Text, dblColorValue)
-                p_drawClusterShape pwshChartSheet, lngClusterX0, lngClusterY0, lngClusterWidth, lngClusterHeight, _
-                                strShapeLabel, rngCurrent.Offset(, 3).Value
-            Else
-                'cluster data by using this function recursive
-                basSystem.log "recursive cluster " & intCluster & " from record " & lngClusterStart & " to " & lngClusterEnd & _
-                                " for area x:" & lngClusterX0 & " y:" & lngClusterY0 & " w:" & lngClusterWidth & _
-                                " h:" & lngClusterHeight
-                p_clusterData pwshChartSheet, pwshTmpData, lngClusterStart, lngClusterEnd, _
-                                lngClusterX0, lngClusterY0, lngClusterWidth, lngClusterHeight
-                basSystem.log "return from cluster " & lngClusterStart & " to " & lngClusterEnd
+        If Application.WorksheetFunction.IsNumber(rngCurrent.Offset(, 1).Value) Then
+            'add the record value to the cluster value
+             dblClusterValue = dblClusterValue + Abs(rngCurrent.Offset(, 1).Value)
+            'if next record would succeed cluster limit or current record is last record then cluster is complete
+             If ((intCluster < 3) And _
+                            (Abs(Application.WorksheetFunction.Sum(Range(rngClusterRange.Cells(1, 1), _
+                            rngClusterRange.Cells(lngRecord + 1, 1)))) _
+                        > dblClusterLimit)) Or (lngRecord = lngClusterAreaSize) Then
+                'save last record for this cluster
+                lngClusterEnd = plngFromRecord + lngRecord - 1
+                'calculate size of the cluster
+                dblClusterSizePct = dblClusterValue / dblClusterRangeValue
+                'determine shape size of this cluster
+                dblClusterArea = dblClusterRangeArea * dblClusterSizePct
+                'shape edge size depends on cluster id
+                Select Case intCluster
+                    Case 1
+                        'first cluster shape is on top and takes full width
+                        'use given coordinates as origin for the first cluster
+                        lngClusterX0 = plngClusterShapeX0
+                        lngClusterY0 = plngClusterShapeY0
+                        lngClusterWidth = plngClusterRangeWidth
+                        'height depends on cluster area size
+                        lngClusterHeight = dblClusterArea / plngClusterRangeWidth
+                    Case 2
+                        'second cluster shape is left below first cluster shape
+                        lngClusterY0 = lngClusterY0 + lngClusterHeight
+                        'next line is just for a better understanding
+                        lngClusterX0 = lngClusterX0
+                        'width depends on cluster area size
+                        lngClusterWidth = lngClusterWidth * _
+                            (dblClusterArea / (dblClusterRangeArea - (lngClusterWidth * lngClusterHeight)))
+                        lngClusterHeight = plngClusterRangeHeight - lngClusterHeight
+                    Case 3
+                        'third cluster shape is right below first cluster shape
+                        lngClusterX0 = lngClusterX0 + lngClusterWidth
+                        'next line is just for a better understanding
+                        lngClusterY0 = lngClusterY0
+                        'height is the same as for cluster 2
+                        lngClusterHeight = lngClusterHeight
+                        'width of cluster three is the remaining width
+                        lngClusterWidth = plngClusterRangeWidth - lngClusterWidth
+                End Select
+                'if cluster contains only one record, draw cluster
+                If lngClusterEnd - lngClusterStart = 0 Then
+                    basSystem.log "draw cluster " & intCluster
+                    'draw cluster shape
+                    If Config.ColorDataAvailable Then
+                        dblColorValue = rngCurrent.Offset(, 3).Value / basThreemap.p_ColorValueLimit
+                    Else
+                        dblColorValue = 0
+                    End If
+                    strShapeLabel = p_getShapeLabel(Config.txtDescriptionOutput.Text, rngCurrent.Offset(, 1).Value, _
+                                        rngCurrent.Offset(, 2).Text, dblColorValue)
+                    p_drawClusterShape pwshChartSheet, lngClusterX0, lngClusterY0, lngClusterWidth, lngClusterHeight, _
+                                    strShapeLabel, dblColorValue
+                Else
+                    'cluster data by using this function recursive
+                    basSystem.log "recursive cluster " & intCluster & " from record " & lngClusterStart & " to " & lngClusterEnd & _
+                                    " for area x:" & lngClusterX0 & " y:" & lngClusterY0 & " w:" & lngClusterWidth & _
+                                    " h:" & lngClusterHeight
+                    p_clusterData pwshChartSheet, pwshTmpData, lngClusterStart, lngClusterEnd, _
+                                    lngClusterX0, lngClusterY0, lngClusterWidth, lngClusterHeight
+                    basSystem.log "return from cluster " & lngClusterStart & " to " & lngClusterEnd
+                End If
+                'start next cluster
+                intCluster = intCluster + 1
+                'reset cluster value
+                dblClusterValue = 0
+                'set new cluster start
+                lngClusterStart = plngFromRecord + lngRecord
             End If
-            'start next cluster
-            intCluster = intCluster + 1
-            'reset cluster value
-            dblClusterValue = 0
-            'set new cluster start
-            lngClusterStart = plngFromRecord + lngRecord
         End If
         'move to next record
         Set rngCurrent = rngCurrent.Offset(1)
@@ -426,8 +439,11 @@ Private Sub p_cleanup(pwshTmpData As Worksheet)
     basSystem.log ("cleanup names and temporary data sheet")
     'remove names from data sheet
     pwshTmpData.Parent.Names(cRngValues).Delete
+    'ignore errors because lables and color values are optional
+    On Error Resume Next
     pwshTmpData.Parent.Names(cRngDescription).Delete
     pwshTmpData.Parent.Names(cRngColorData).Delete
+    On Error GoTo error_handler
     pwshTmpData.Parent.Names(cRngIndex).Delete
     'clean up - delete temporary data sheet
     Application.DisplayAlerts = False
@@ -565,6 +581,9 @@ Private Function p_getBlockFillColor(pdblPctInputVal As Double) As Long
         basSystem.logd "positiv color is r: " & CInt(cBaseRed * (1 - pdblPctInputVal) + cPositiveRed * pdblPctInputVal) & _
                          " | g: " & CInt(cBaseGreen * (1 - pdblPctInputVal) + cPositiveGreen * pdblPctInputVal) & _
                          " | b: " & CInt(cBaseBlue * (1 - pdblPctInputVal) + cPositiveBlue * pdblPctInputVal)
+    ElseIf pdblPctInputVal = 0 Then
+        rgbBlockFillColor = basThreemap.p_DefaultColor
+        basSystem.logd "colorvalue does not exists or is neutral"
     Else
         pdblPctInputVal = Abs(pdblPctInputVal)
         rgbBlockFillColor = RGB(CInt(cBaseRed * (1 - pdblPctInputVal) + cNegativeRed * pdblPctInputVal), _
@@ -596,11 +615,18 @@ Private Sub p_setupDataRangeInput()
             'didn't found data table
             Config.lblStatusbar.Caption = "Enter data range manually or select at least one cell from description column"
         ElseIf rngData.Columns.Count = 1 And rngData.Rows.Count > 1 Then
-            'TODO:expect that only size is available, color and description are left
-            
+            'expect that only size is available, color and description are left
+            strAddress = rngData.Columns(1).Address
+            strAddress = Replace(strAddress, "$", "")
+            Config.txtSizeRange.Text = strAddress
         ElseIf rngData.Columns.Count = 2 Then
-            'TODO:expect that description column is missing
-            
+            'expect that color column is missing
+            strAddress = rngData.Columns(1).Address
+            strAddress = Replace(strAddress, "$", "")
+            Config.txtLabelRange.Text = strAddress
+            strAddress = rngData.Columns(2).Address
+            strAddress = Replace(strAddress, "$", "")
+            Config.txtSizeRange.Text = strAddress
         Else
             'expect at least three columns: description, size and color values
             strAddress = rngData.Columns(1).Address
@@ -634,17 +660,21 @@ Private Function p_getShapeLabel(pstrLabelPattern As String, pdblSizeValue As Do
     Dim strShapeLabel As String
 
     On Error GoTo error_handler
-    'insert size
-    strShapeLabel = Replace(pstrLabelPattern, "#size", pdblSizeValue)
-    'insert label
-    If Not IsMissing(pstrLabel) Then
-        strShapeLabel = Replace(strShapeLabel, "#label", pstrLabel)
+    If Config.LabelsAvailable Then
+        'insert size
+        strShapeLabel = Replace(pstrLabelPattern, "#size", pdblSizeValue)
+        'insert label
+        If Not IsMissing(pstrLabel) Then
+            strShapeLabel = Replace(strShapeLabel, "#label", pstrLabel)
+        End If
+        'insert color percentage
+        If Not IsMissing(pdblColorValue) Then
+            strShapeLabel = Replace(strShapeLabel, "#colorpct", Format(pdblColorValue, "0.0%"))
+        End If
+        p_getShapeLabel = strShapeLabel
+    Else
+        p_getShapeLabel = ""
     End If
-    'insert color percentage
-    If Not IsMissing(pdblColorValue) Then
-        strShapeLabel = Replace(strShapeLabel, "#colorpct", Format(pdblColorValue, "0.0%"))
-    End If
-    p_getShapeLabel = strShapeLabel
     Exit Function
 
 error_handler:
