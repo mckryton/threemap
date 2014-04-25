@@ -85,6 +85,8 @@ Public Sub createTreemap()
     Dim wshDataSheet As Worksheet
 
     On Error GoTo error_handler
+    'reset config
+    Set mfrmConfig = Nothing
     'detect input data and fill config dialog with results
     Set wshDataSheet = ActiveSheet
     p_setupDataRangeInput
@@ -655,7 +657,7 @@ End Sub
 '                pdblColorValue     - normalized color value in percent
 ' Returnvalue  : text to put on a single shape
 '------------------------------------------------------------------------
-Private Function p_getShapeLabel(pstrLabelPattern As String, pdblSizeValue As Double, Optional pstrLabel, Optional pdblColorValue)
+Private Function p_getShapeLabel(pstrLabelPattern As String, pdblSizeValue As Double, pstrLabel As String, pdblColorValue As Double)
 
     Dim strShapeLabel As String
 
@@ -669,7 +671,7 @@ Private Function p_getShapeLabel(pstrLabelPattern As String, pdblSizeValue As Do
         End If
         'insert color percentage
         If Not IsMissing(pdblColorValue) Then
-            strShapeLabel = Replace(strShapeLabel, "#colorpct", Format(pdblColorValue, "0.0%"))
+            strShapeLabel = Replace(strShapeLabel, "#colorpct", Format(pdblColorValue, "0.0%;-0.0%"))
         End If
         p_getShapeLabel = strShapeLabel
     Else
